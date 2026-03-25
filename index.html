@@ -10,98 +10,176 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
-        @keyframes popIn { 0% { opacity: 0; transform: scale(0.9) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
-        .answer-card { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        .chart-toggle.active { background-color: #3b82f6; color: white; }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overflow-x: hidden; }
+        
+        /* Animationer för svarskort */
+        @keyframes popIn { 
+            0% { opacity: 0; transform: scale(0.9) translateY(20px); } 
+            100% { opacity: 1; transform: scale(1) translateY(0); } 
+        }
+        .answer-card { 
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+
+        .chart-toggle.active { 
+            background-color: #3b82f6; 
+            color: white;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-4">
 
     <!-- Laddningsskärm -->
     <div id="loader" class="flex flex-col items-center justify-center space-y-4">
-        <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i>
-        <p class="text-slate-400">Ansluter till servern...</p>
+        <div class="relative w-16 h-16">
+            <div class="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <p class="text-slate-400 font-medium animate-pulse">Ansluter till systemet...</p>
     </div>
 
     <!-- Felmeddelande -->
-    <div id="error-message" class="hidden fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center space-x-3">
-        <i class="fas fa-exclamation-triangle"></i>
-        <span id="error-text">Ett fel uppstod.</span>
-        <button onclick="hideError()" class="ml-4"><i class="fas fa-times"></i></button>
+    <div id="error-message" class="hidden fixed top-6 left-1/2 transform -translate-x-1/2 bg-red-500/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center space-x-4 border border-red-400/50">
+        <i class="fas fa-exclamation-circle text-xl"></i>
+        <span id="error-text" class="font-medium">Ett fel uppstod.</span>
+        <button onclick="this.parentElement.classList.add('hidden')" class="hover:bg-white/20 p-1 rounded-full transition-colors"><i class="fas fa-times"></i></button>
     </div>
 
     <!-- VY 1: SKAPA FRÅGA -->
-    <div id="view-create" class="hidden w-full max-w-3xl flex flex-col items-center space-y-6">
-        <h1 class="text-4xl font-bold text-blue-400">Fråga auditoriet</h1>
-        <div class="w-full bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl">
-            <div class="flex mb-4 bg-slate-900 p-1 rounded-lg">
-                <button id="btn-open" onclick="setMode('open')" class="flex-1 py-2 rounded-md bg-blue-600">Öppen fråga</button>
-                <button id="btn-poll" onclick="setMode('poll')" class="flex-1 py-2 rounded-md text-slate-400">Omröstning</button>
-            </div>
-            <input type="text" id="question-input" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-white mb-4 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Skriv din fråga här...">
-            
-            <div id="poll-options" class="hidden space-y-2 mb-6">
-                <p class="text-slate-400 text-xs font-bold uppercase">Alternativ</p>
-                <input type="text" class="poll-opt w-full bg-slate-900 p-3 rounded-lg border border-slate-700 text-white" placeholder="Alternativ 1">
-                <input type="text" class="poll-opt w-full bg-slate-900 p-3 rounded-lg border border-slate-700 text-white" placeholder="Alternativ 2">
-                <div id="extra-opts" class="space-y-2"></div>
-                <button onclick="addOpt()" class="text-blue-400 text-sm hover:underline">+ Lägg till fler</button>
+    <div id="view-create" class="hidden w-full max-w-2xl flex flex-col items-center space-y-8">
+        <div class="text-center space-y-2">
+            <h1 class="text-5xl font-black tracking-tight text-white">Fråga <span class="text-blue-500">auditoriet</span></h1>
+            <p class="text-slate-400">Skapa en interaktiv upplevelse på några sekunder</p>
+        </div>
+
+        <div class="w-full bg-slate-800/50 backdrop-blur-xl p-8 rounded-3xl border border-slate-700/50 shadow-2xl">
+            <div class="flex mb-8 bg-slate-900/50 p-1.5 rounded-2xl border border-slate-700/30">
+                <button id="btn-open" onclick="setMode('open')" class="flex-1 py-3 rounded-xl font-bold transition-all duration-300 bg-blue-600 text-white shadow-lg">Öppen fråga</button>
+                <button id="btn-poll" onclick="setMode('poll')" class="flex-1 py-3 rounded-xl font-bold transition-all duration-300 text-slate-400 hover:text-slate-200">Omröstning</button>
             </div>
 
-            <button onclick="startPresentation()" class="w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-xl font-bold text-xl transition-all shadow-lg shadow-blue-600/20">Starta</button>
+            <div class="space-y-6">
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1">Din fråga</label>
+                    <input type="text" id="question-input" class="w-full bg-slate-900 p-5 rounded-2xl border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-lg" placeholder="Vad vill du veta?">
+                </div>
+                
+                <div id="poll-options" class="hidden space-y-4 animate-in fade-in duration-300">
+                    <label class="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1">Svarsalternativ</label>
+                    <div class="space-y-3">
+                        <input type="text" class="poll-opt w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-blue-500/50" placeholder="Alternativ 1">
+                        <input type="text" class="poll-opt w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-blue-500/50" placeholder="Alternativ 2">
+                        <div id="extra-opts" class="space-y-3"></div>
+                    </div>
+                    <button onclick="addOpt()" class="flex items-center space-x-2 text-blue-400 text-sm font-bold hover:text-blue-300 transition-colors py-2">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>Lägg till alternativ</span>
+                    </button>
+                </div>
+
+                <button onclick="startPresentation()" class="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-xl transition-all shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-[0.98]">
+                    Starta presentation
+                </button>
+            </div>
         </div>
-        <div id="history-list" class="w-full max-w-md space-y-2"></div>
+
+        <div id="history-section" class="w-full max-w-md hidden">
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4 text-center">Tidigare sessioner</p>
+            <div id="history-list" class="space-y-3"></div>
+        </div>
     </div>
 
     <!-- VY 2: RESULTAT & QR -->
-    <div id="view-results" class="hidden w-full max-w-6xl flex flex-col items-center space-y-8">
-        <h2 id="display-question" class="text-3xl md:text-5xl font-extrabold text-center leading-tight"></h2>
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 w-full">
-            <div class="lg:col-span-1 bg-white p-6 rounded-2xl flex flex-col items-center shadow-2xl h-fit">
-                <div id="qrcode"></div>
-                <p class="text-slate-900 font-bold mt-4 text-xs">SKANNA FÖR ATT SVARA</p>
-                <p id="live-count" class="text-blue-600 font-black mt-2 text-3xl">0 svar</p>
-                <button onclick="location.href=location.pathname" class="mt-8 text-slate-400 hover:text-slate-600 text-xs uppercase font-bold tracking-widest">Avsluta</button>
+    <div id="view-results" class="hidden w-full max-w-7xl flex flex-col items-center space-y-10">
+        <div class="text-center space-y-4 max-w-4xl">
+            <h2 id="display-question" class="text-4xl md:text-6xl font-black text-white leading-tight tracking-tight"></h2>
+            <div class="h-1.5 w-24 bg-blue-600 mx-auto rounded-full"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full items-start">
+            <!-- Sidopanel med QR -->
+            <div class="lg:col-span-3 space-y-6">
+                <div class="bg-white p-8 rounded-[2.5rem] flex flex-col items-center shadow-2xl relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-full h-2 bg-blue-500"></div>
+                    <div id="qrcode" class="p-2 bg-white rounded-xl"></div>
+                    <div class="text-center mt-6">
+                        <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Skanna för att delta</p>
+                        <div class="flex items-center justify-center space-x-2 mt-2">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                            </span>
+                            <p id="live-count" class="text-slate-900 font-black text-4xl italic">0 svar</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <button onclick="location.href=location.pathname" class="w-full py-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/50 transition-all font-bold text-sm uppercase tracking-widest">
+                    Avsluta session
+                </button>
             </div>
-            <div class="lg:col-span-3 relative">
-                <!-- DIAGRAMVÄXLARE -->
-                <div id="chart-controls" class="hidden absolute top-0 right-0 flex space-x-2 z-10">
-                    <button id="toggle-pie" onclick="switchChartType('pie')" class="chart-toggle active p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors">
+
+            <!-- Huvudområde för svar -->
+            <div class="lg:col-span-9 relative min-h-[500px]">
+                <!-- Diagramväxlare (syns bara vid poll) -->
+                <div id="chart-controls" class="hidden absolute -top-4 right-0 flex bg-slate-900/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-700/50 z-20 shadow-xl">
+                    <button id="toggle-pie" onclick="switchChartType('pie')" class="chart-toggle active px-4 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all">
                         <i class="fas fa-chart-pie"></i>
+                        <span>Cirkel</span>
                     </button>
-                    <button id="toggle-bar" onclick="switchChartType('bar')" class="chart-toggle p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors">
+                    <button id="toggle-bar" onclick="switchChartType('bar')" class="chart-toggle px-4 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all">
                         <i class="fas fa-chart-bar"></i>
+                        <span>Stapel</span>
                     </button>
                 </div>
 
-                <div id="answers-container" class="flex flex-wrap gap-3 content-start"></div>
-                <div id="poll-container" class="hidden bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl h-[500px] flex items-center justify-center">
-                    <canvas id="pollChart"></canvas>
+                <div id="answers-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start"></div>
+                
+                <div id="poll-container" class="hidden bg-slate-800/30 backdrop-blur-md p-10 rounded-[3rem] border border-slate-700/50 shadow-2xl h-[600px] flex items-center justify-center">
+                    <div class="w-full h-full max-h-[500px] flex items-center justify-center">
+                        <canvas id="pollChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- VY 3: DELTAGARE -->
-    <div id="view-audience" class="hidden w-full max-w-md flex flex-col items-center space-y-6">
-        <div class="bg-slate-800 p-8 rounded-3xl border border-slate-700 w-full shadow-2xl">
-            <h2 id="audience-q" class="text-2xl font-bold mb-8 text-center"></h2>
-            <div id="open-ui" class="hidden">
-                <textarea id="audience-input" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-white mb-6 outline-none focus:ring-2 focus:ring-blue-500" rows="4" placeholder="Skriv ditt svar..."></textarea>
-                <button id="send-btn" onclick="submitAnswer()" class="w-full bg-blue-600 py-4 rounded-xl font-bold text-lg">Skicka svar</button>
+    <!-- VY 3: DELTAGARE (MOBIL) -->
+    <div id="view-audience" class="hidden w-full max-w-md flex flex-col items-center px-4">
+        <div class="w-full bg-slate-800 p-8 rounded-[2.5rem] border border-slate-700 shadow-2xl space-y-8">
+            <div class="space-y-2 text-center">
+                <p class="text-blue-500 font-bold text-xs uppercase tracking-[0.2em]">Aktuell fråga</p>
+                <h2 id="audience-q" class="text-2xl font-black text-white leading-tight"></h2>
             </div>
-            <div id="poll-ui" class="hidden space-y-3"></div>
+
+            <div id="open-ui" class="hidden space-y-4">
+                <textarea id="audience-input" class="w-full bg-slate-900 p-5 rounded-2xl border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-lg" rows="4" placeholder="Skriv ditt svar här..."></textarea>
+                <button id="send-btn" onclick="submitAnswer()" class="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-xl transition-all shadow-xl shadow-blue-600/20">
+                    Skicka in
+                </button>
+            </div>
+
+            <div id="poll-ui" class="hidden grid grid-cols-1 gap-3"></div>
         </div>
     </div>
 
     <!-- VY 4: TACK -->
-    <div id="view-thanks" class="hidden text-center space-y-4">
-        <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i class="fas fa-check text-4xl text-emerald-500"></i>
+    <div id="view-thanks" class="hidden text-center space-y-6 animate-in zoom-in duration-500">
+        <div class="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/20">
+            <i class="fas fa-check text-5xl text-emerald-500"></i>
         </div>
-        <h2 class="text-3xl font-bold">Tack för ditt svar!</h2>
-        <p class="text-slate-400">Resultaten visas på storbildsskärmen.</p>
+        <div class="space-y-2">
+            <h2 class="text-4xl font-black text-white">Svaret är skickat!</h2>
+            <p class="text-slate-400 text-lg">Tack för ditt deltagande. Håll ögonen på storbildsskärmen.</p>
+        </div>
     </div>
 
     <script type="module">
@@ -138,22 +216,27 @@
 
         window.setMode = (m) => {
             currentMode = m;
-            document.getElementById('btn-open').className = `flex-1 py-2 rounded-md ${m==='open'?'bg-blue-600':'text-slate-400'}`;
-            document.getElementById('btn-poll').className = `flex-1 py-2 rounded-md ${m==='poll'?'bg-blue-600':'text-slate-400'}`;
-            document.getElementById('poll-options').classList.toggle('hidden', m === 'open');
+            const isOpen = m === 'open';
+            document.getElementById('btn-open').className = `flex-1 py-3 rounded-xl font-bold transition-all duration-300 ${isOpen ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`;
+            document.getElementById('btn-poll').className = `flex-1 py-3 rounded-xl font-bold transition-all duration-300 ${!isOpen ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`;
+            document.getElementById('poll-options').classList.toggle('hidden', isOpen);
         };
 
         window.addOpt = () => {
             const i = document.createElement('input');
-            i.className = "poll-opt w-full bg-slate-900 p-3 rounded-lg border border-slate-700 text-white";
-            i.placeholder = "Nytt alternativ";
+            i.className = "poll-opt w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-blue-500/50 animate-in slide-in-from-top-2 duration-300";
+            i.placeholder = `Alternativ ${document.querySelectorAll('.poll-opt').length + 1}`;
             document.getElementById('extra-opts').appendChild(i);
+            i.focus();
         };
 
         window.startPresentation = async () => {
             const q = document.getElementById('question-input').value.trim();
-            if(!q) return;
+            if(!q) return showError("Du måste skriva en fråga.");
+            
             const opts = Array.from(document.querySelectorAll('.poll-opt')).map(i => i.value.trim()).filter(v => v);
+            if(currentMode === 'poll' && opts.length < 2) return showError("Minst två alternativ krävs.");
+
             const id = Math.random().toString(36).substring(2, 8).toUpperCase();
             
             const sessionData = { 
@@ -168,32 +251,28 @@
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id), sessionData);
                 saveHistory(id, q);
                 window.location.search = `?s=${id}`;
-            } catch(e) { window.showError("Kunde inte starta sessionen."); }
+            } catch(e) { showError("Kunde inte starta sessionen."); }
         };
 
         async function loadSession() {
-            const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSId));
-            if (!snap.exists()) return window.showError("Frågan hittades inte.");
-            
-            const data = snap.data();
-            if (!/iPhone|Android/i.test(navigator.userAgent)) {
-                showResults(data);
-            } else {
-                showAudience(data);
-            }
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSId));
+                if (!snap.exists()) return showError("Frågan hittades inte.");
+                
+                const data = snap.data();
+                if (!/iPhone|Android|iPad/i.test(navigator.userAgent)) {
+                    showResults(data);
+                } else {
+                    showAudience(data);
+                }
+            } catch(e) { showError("Ett tekniskt fel uppstod."); }
         }
 
         window.switchChartType = (type) => {
             currentChartType = type;
             document.getElementById('toggle-pie').classList.toggle('active', type === 'pie');
             document.getElementById('toggle-bar').classList.toggle('active', type === 'bar');
-            
-            // Vi triggar en omritning genom att förstöra det gamla diagrammet
-            if (chart) {
-                chart.destroy();
-                chart = null;
-            }
-            // Datan kommer uppdateras automatiskt via onSnapshot
+            if (chart) { chart.destroy(); chart = null; }
         };
 
         function showResults(data) {
@@ -201,10 +280,13 @@
             document.getElementById('view-results').classList.remove('hidden');
             if (data.type === 'poll') document.getElementById('chart-controls').classList.remove('hidden');
             
-            new QRCode(document.getElementById('qrcode'), { text: window.location.href, width: 200, height: 200 });
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, { text: window.location.href, width: 220, height: 220, colorDark: "#0f172a", colorLight: "#ffffff" });
 
             onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSId), (snap) => {
                 const updated = snap.data();
+                if (!updated) return;
                 const answers = updated.answers || [];
                 document.getElementById('live-count').innerText = `${answers.length} svar`;
 
@@ -221,7 +303,7 @@
             cont.innerHTML = '';
             [...answers].reverse().forEach(a => {
                 const d = document.createElement('div');
-                d.className = "answer-card bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg";
+                d.className = "answer-card p-6 rounded-3xl border border-slate-700/50 shadow-xl text-white text-lg font-medium leading-relaxed";
                 d.innerText = a.text;
                 cont.appendChild(d);
             });
@@ -230,7 +312,6 @@
         function renderChart(opts, answers) {
             document.getElementById('poll-container').classList.remove('hidden');
             const counts = opts.map(o => answers.filter(a => a.text === o).length);
-            
             const ctx = document.getElementById('pollChart').getContext('2d');
 
             if (chart && chart.config.type === currentChartType) {
@@ -240,6 +321,7 @@
             } else {
                 if (chart) chart.destroy();
                 
+                const isBar = currentChartType === 'bar';
                 const config = {
                     type: currentChartType,
                     data: {
@@ -248,23 +330,39 @@
                             data: counts, 
                             backgroundColor: chartColors,
                             borderColor: '#1e293b',
-                            borderWidth: 2,
-                            borderRadius: currentChartType === 'bar' ? 8 : 0
+                            borderWidth: 3,
+                            borderRadius: isBar ? 12 : 0,
+                            hoverOffset: 20
                         }]
                     },
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false,
+                        animation: { duration: 1000, easing: 'easeOutQuart' },
                         plugins: { 
                             legend: { 
-                                display: currentChartType === 'pie',
+                                display: !isBar,
                                 position: 'bottom',
-                                labels: { color: '#f8fafc', font: { size: 14, weight: '600' }, padding: 20 }
-                            } 
+                                labels: { color: '#f8fafc', font: { size: 16, weight: '700', family: "'Inter', sans-serif" }, padding: 30, usePointStyle: true }
+                            },
+                            tooltip: { 
+                                backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                                padding: 15, 
+                                titleFont: { size: 16 }, 
+                                bodyFont: { size: 14 }, 
+                                cornerRadius: 12 
+                            }
                         },
-                        scales: currentChartType === 'bar' ? {
-                            y: { beginAtZero: true, ticks: { color: '#94a3b8', stepSize: 1 } },
-                            x: { ticks: { color: '#f8fafc' } }
+                        scales: isBar ? {
+                            y: { 
+                                beginAtZero: true, 
+                                grid: { color: 'rgba(255,255,255,0.05)' },
+                                ticks: { color: '#94a3b8', font: { weight: 'bold' }, stepSize: 1 } 
+                            },
+                            x: { 
+                                grid: { display: false },
+                                ticks: { color: '#f8fafc', font: { size: 14, weight: 'bold' } } 
+                            }
                         } : {}
                     }
                 };
@@ -281,8 +379,8 @@
                 ui.classList.remove('hidden');
                 data.options.forEach(o => {
                     const b = document.createElement('button');
-                    b.className = "w-full bg-slate-700 p-4 rounded-xl text-left border border-slate-600 hover:bg-slate-600 transition-all";
-                    b.innerText = o;
+                    b.className = "w-full bg-slate-700/50 p-5 rounded-2xl text-left border border-slate-600 hover:bg-blue-600 hover:border-blue-400 transition-all font-bold text-white text-lg flex justify-between items-center group active:scale-95";
+                    b.innerHTML = `<span>${o}</span> <i class="fas fa-chevron-right opacity-0 group-hover:opacity-100 transition-opacity"></i>`;
                     b.onclick = () => window.submitAnswer(o);
                     ui.appendChild(b);
                 });
@@ -296,25 +394,28 @@
             if (!val) return;
             
             try {
+                // Skicka röst som unikt objekt för att kringgå arrayUnion-begränsningar för dubbletter
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSId), {
                     answers: arrayUnion({ text: val, t: Date.now() + Math.random() })
                 });
                 document.getElementById('view-audience').classList.add('hidden');
                 document.getElementById('view-thanks').classList.remove('hidden');
-            } catch (e) { window.showError("Kunde inte skicka svar."); }
+            } catch (e) { showError("Kunde inte skicka svar."); }
         };
 
         function showCreate() {
             document.getElementById('view-create').classList.remove('hidden');
             const hist = JSON.parse(localStorage.getItem('menti_hist_v2') || '[]');
             const list = document.getElementById('history-list');
-            list.innerHTML = '';
+            const section = document.getElementById('history-section');
+            
             if (hist.length > 0) {
-                list.innerHTML = '<p class="text-slate-500 text-xs font-bold uppercase mb-2">Historik</p>';
+                section.classList.remove('hidden');
+                list.innerHTML = '';
                 hist.forEach(h => {
                     const b = document.createElement('button');
-                    b.className = "w-full bg-slate-800/40 p-3 rounded-lg border border-slate-700 text-left text-sm flex justify-between items-center mb-2";
-                    b.innerHTML = `<span>${h.q}</span> <i class="fas fa-chevron-right opacity-30"></i>`;
+                    b.className = "w-full bg-slate-800/40 p-4 rounded-xl border border-slate-700 text-left text-sm flex justify-between items-center group hover:border-blue-500/50 transition-all";
+                    b.innerHTML = `<span class="truncate pr-4 font-medium text-slate-300 group-hover:text-white transition-colors">${h.q}</span> <i class="fas fa-arrow-right text-blue-500 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1"></i>`;
                     b.onclick = () => window.location.search = `?s=${h.id}`;
                     list.appendChild(b);
                 });
@@ -328,9 +429,10 @@
         }
 
         window.showError = (m) => {
+            const err = document.getElementById('error-message');
             document.getElementById('error-text').innerText = m;
-            document.getElementById('error-message').classList.remove('hidden');
-            setTimeout(() => document.getElementById('error-message').classList.add('hidden'), 5000);
+            err.classList.remove('hidden');
+            setTimeout(() => err.classList.add('hidden'), 5000);
         };
     </script>
 </body>
