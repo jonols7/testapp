@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fråga auditoriet</title>
+    <title>Fråga auditoriet - P2P</title>
     <!-- Tailwind CSS för styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome för ikoner -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- QRCode.js för att generera QR-koder -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- SheetJS för Excel-export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- html2pdf för PDF-export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- Chart.js för cirkeldiagram (Omröstningar) -->
+    <!-- PeerJS för direktkommunikation (ersätter Firebase) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Chart.js för cirkeldiagram -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -25,7 +23,6 @@
             color: #f8fafc;
         }
         
-        /* Animationer */
         @keyframes popIn {
             0% { opacity: 0; transform: scale(0.9) translateY(10px); }
             100% { opacity: 1; transform: scale(1) translateY(0); }
@@ -33,128 +30,70 @@
         .answer-card {
             animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
-
-        /* Utskriftsläge */
-        .pdf-mode {
-            background-color: white !important;
-            color: black !important;
-            padding: 20px !important;
-        }
-        .pdf-mode .answer-card {
-            background-color: #f1f5f9 !important;
-            color: #0f172a !important;
-            border: 1px solid #cbd5e1 !important;
-        }
-        .pdf-mode .no-print {
-            display: none !important;
-        }
         .tab-btn { transition: all 0.3s ease; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 relative">
 
-    <button onclick="openInfoModal()" class="fixed top-4 right-4 md:top-6 md:right-6 text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 rounded-full w-10 h-10 flex items-center justify-center shadow-lg border border-slate-700 z-40 no-print" title="Information om datahantering">
-        <i class="fas fa-info text-lg"></i>
-    </button>
-
-    <div id="loader" class="flex flex-col items-center justify-center space-y-4">
-        <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i>
-        <p class="text-slate-400">Laddar...</p>
-    </div>
-
-    <div id="error-message" class="hidden fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-3">
-        <i class="fas fa-exclamation-triangle"></i>
-        <span id="error-text">Ett fel uppstod.</span>
-        <button onclick="hideError()" class="ml-4 hover:text-red-200"><i class="fas fa-times"></i></button>
+    <!-- Status-indikator för P2P anslutning -->
+    <div id="connection-status" class="fixed top-4 left-4 flex items-center space-x-2 text-xs font-mono opacity-50">
+        <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></div>
+        <span id="status-text">Ej ansluten</span>
     </div>
 
     <!-- VY 1: SKAPA FRÅGA -->
-    <div id="view-create" class="hidden w-full max-w-3xl flex flex-col items-center text-center space-y-8 animate-fade-in">
+    <div id="view-create" class="w-full max-w-3xl flex flex-col items-center text-center space-y-8">
         <div class="space-y-2">
             <h1 class="text-4xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 pb-2">
                 Fråga auditoriet
             </h1>
-            <p class="text-slate-400 text-lg">Ställ en fråga till publiken och visa svaren i realtid via Firebase.</p>
+            <p class="text-slate-400 text-lg">Direktkommunikation via webbläsaren (ingen Firebase behövs).</p>
         </div>
-        <br>
+        
         <div class="w-full bg-slate-800 p-6 md:p-8 rounded-2xl shadow-2xl border border-slate-700">
-            
             <div class="flex justify-center mb-6 w-full">
                 <div class="bg-slate-900/80 p-1.5 rounded-xl flex w-full max-w-md border border-slate-700">
-                    <button id="tab-open" onclick="setQuestionType('open')" class="tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg bg-blue-600 text-white font-semibold shadow-md">
-                        <i class="fas fa-comment-dots mr-2"></i> Öppen fråga
+                    <button id="tab-open" onclick="setQuestionType('open')" class="tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg bg-blue-600 text-white font-semibold">
+                        <i class="fas fa-comment-dots mr-2"></i> Öppen
                     </button>
-                    <button id="tab-poll" onclick="setQuestionType('poll')" class="tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg text-slate-400 hover:text-white font-medium">
+                    <button id="tab-poll" onclick="setQuestionType('poll')" class="tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg text-slate-400 hover:text-white">
                         <i class="fas fa-chart-pie mr-2"></i> Omröstning
                     </button>
                 </div>
             </div>
 
             <input type="text" id="question-input" 
-                class="w-full bg-slate-700 text-white text-xl md:text-2xl rounded-xl p-4 border border-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder-slate-400"
-                placeholder="T.ex. Vad har ni för förväntningar på dagens föreläsning?">
+                class="w-full bg-slate-700 text-white text-xl md:text-2xl rounded-xl p-4 border border-slate-600 focus:border-blue-500 outline-none"
+                placeholder="Skriv din fråga här...">
             
-            <div id="poll-options-container" class="hidden w-full mt-6 space-y-3 bg-slate-900/40 p-5 rounded-xl border border-slate-700/50">
-                <p class="text-left text-slate-400 text-sm font-semibold uppercase tracking-wider mb-2">Svarsalternativ</p>
-                <div id="poll-options-list" class="space-y-3 w-full">
-                    <div class="flex items-center space-x-3 option-row">
-                        <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-slate-400 text-sm shrink-0 shadow-inner">1</div>
-                        <input type="text" class="poll-option flex-1 bg-slate-700/80 text-white text-lg rounded-lg p-3 border border-slate-600 focus:border-blue-500 outline-none placeholder-slate-500" placeholder="Alternativ 1">
-                        <button onclick="removeOption(this)" class="text-slate-500 hover:text-red-400 w-8 h-8 flex items-center justify-center opacity-50 cursor-not-allowed" disabled><i class="fas fa-trash"></i></button>
-                    </div>
-                    <div class="flex items-center space-x-3 option-row">
-                        <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-slate-400 text-sm shrink-0 shadow-inner">2</div>
-                        <input type="text" class="poll-option flex-1 bg-slate-700/80 text-white text-lg rounded-lg p-3 border border-slate-600 focus:border-blue-500 outline-none placeholder-slate-500" placeholder="Alternativ 2">
-                        <button onclick="removeOption(this)" class="text-slate-500 hover:text-red-400 w-8 h-8 flex items-center justify-center opacity-50 cursor-not-allowed" disabled><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>
-                <button onclick="addPollOption()" class="text-blue-400 hover:text-blue-300 font-medium text-sm mt-4 flex items-center justify-center w-full py-2 bg-slate-800/50 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors">
+            <div id="poll-options-container" class="hidden w-full mt-6 space-y-3 bg-slate-900/40 p-5 rounded-xl">
+                <div id="poll-options-list" class="space-y-3 w-full"></div>
+                <button onclick="addPollOption()" class="text-blue-400 hover:text-blue-300 text-sm mt-4">
                     <i class="fas fa-plus mr-2"></i> Lägg till alternativ
                 </button>
             </div>
 
-            <button onclick="startPresentation()" 
-                class="mt-8 w-full md:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-8 rounded-xl text-lg transition-all transform hover:scale-105 shadow-lg shadow-blue-500/30">
-                Starta <i class="fas fa-arrow-right ml-2"></i>
+            <button id="start-btn" onclick="startPresentation()" 
+                class="mt-8 w-full md:w-auto bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-8 rounded-xl text-lg transition-all">
+                Starta Presentation <i class="fas fa-arrow-right ml-2"></i>
             </button>
-        </div>
-        
-        <div id="create-history-section" class="mt-4 hidden flex-col items-center w-full max-w-lg">
-            <p class="text-slate-500 mb-3 text-sm uppercase tracking-wider font-semibold">Eller återuppta tidigare fråga</p>
-            <div id="create-history-list" class="flex flex-col space-y-2 w-full"></div>
         </div>
     </div>
 
     <!-- VY 2: VISA QR-KOD -->
     <div id="view-qr" class="hidden w-full max-w-5xl flex flex-col items-center text-center space-y-12">
-        <div id="qr-question-type-icon" class="text-blue-400 text-2xl mb-[-2rem] mt-4"><i class="fas fa-comment-dots"></i></div>
-        <h1 id="qr-question-display" class="text-4xl md:text-6xl font-bold leading-tight pb-2">Laddar fråga...</h1>
-        
-        <div class="flex flex-col md:flex-row items-center justify-center gap-12 bg-slate-800 p-8 md:p-12 rounded-3xl shadow-2xl border border-slate-700 w-full">
-            <div class="flex flex-col items-center space-y-4">
-                <div id="qrcode-large" class="bg-white p-4 rounded-xl shadow-lg"></div>
-                <p class="text-slate-400 text-lg">Skanna koden med mobilkameran</p>
-            </div>
-            
-            <div class="flex flex-col items-center justify-center space-y-6 text-center md:text-left">
-                <div class="flex flex-col items-center md:items-start">
-                    <p class="text-2xl text-slate-300">Eller gå till webbadressen:</p>
-                    <p id="url-display" class="text-xl text-blue-400 font-mono mt-2 break-all max-w-md bg-slate-900 p-3 rounded-lg border border-slate-700 select-all"></p>
-                    
-                    <button onclick="window.open(document.getElementById('url-display').innerText, '_blank')" 
-                        class="mt-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 py-2 px-4 rounded-lg transition-colors text-sm border border-blue-500/30">
-                        <i class="fas fa-external-link-alt mr-2"></i> Testa deltagarvyn i ny flik
-                    </button>
+        <h1 id="qr-question-display" class="text-4xl md:text-6xl font-bold"></h1>
+        <div class="flex flex-col md:flex-row items-center justify-center gap-12 bg-slate-800 p-8 rounded-3xl border border-slate-700 w-full shadow-2xl">
+            <div id="qrcode-large" class="bg-white p-4 rounded-xl"></div>
+            <div class="text-left space-y-4">
+                <p class="text-xl text-slate-300">Skanna för att svara direkt i mobilen:</p>
+                <p id="url-display" class="text-blue-400 font-mono bg-slate-900 p-3 rounded-lg border border-slate-700 text-sm break-all"></p>
+                <div class="flex items-center space-x-2 text-emerald-400">
+                    <i class="fas fa-users"></i>
+                    <span id="connected-count">0 deltagare anslutna</span>
                 </div>
-                
-                <div class="flex items-center space-x-3 bg-blue-500/10 text-blue-400 px-6 py-3 rounded-full border border-blue-500/20">
-                    <i class="fas fa-users text-xl"></i>
-                    <span class="text-xl font-semibold"><span id="live-answer-count">0</span> inskickade svar</span>
-                </div>
-
-                <button onclick="goToResults()" 
-                    class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-4 px-8 rounded-xl text-xl transition-all shadow-lg shadow-emerald-500/30 mt-4">
-                    Visa Resultat <i class="fas fa-chart-bar ml-2"></i>
+                <button onclick="showResultsView()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-xl">
+                    Visa Svar <i class="fas fa-chart-bar ml-2"></i>
                 </button>
             </div>
         </div>
@@ -162,597 +101,276 @@
 
     <!-- VY 3: RESULTAT -->
     <div id="view-results" class="hidden w-full max-w-6xl flex flex-col items-center">
-        <div class="w-full flex flex-col lg:flex-row justify-between items-center mb-4 gap-4 no-print">
-            <button onclick="goToCreate()" class="w-full lg:w-auto bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-xl transition-colors shadow-lg shadow-blue-600/20 font-semibold flex-shrink-0 flex items-center justify-center">
-                <i class="fas fa-plus mr-2"></i> Skapa ny fråga
-            </button>
-            
-            <div id="history-container" class="hidden flex-1 w-full max-w-lg flex items-center bg-slate-800 rounded-xl p-2 border border-slate-700">
-                <i class="fas fa-history text-slate-400 mx-3"></i>
-                <select id="history-select" onchange="loadSelectedHistory()" class="flex-1 bg-slate-700 text-white rounded-lg p-2 border-none focus:ring-2 focus:ring-blue-500 outline-none text-sm mx-2 cursor-pointer font-medium truncate"></select>
-                <button onclick="deleteSelectedHistory()" class="text-slate-400 hover:text-red-400 p-2 mx-1 transition-colors" title="Radera från historik">
-                    <i class="fas fa-trash-alt text-lg"></i>
-                </button>
-            </div>
-
-            <div id="export-toolbar" class="w-full lg:w-auto flex flex-wrap justify-center gap-2 flex-shrink-0">
-                <button onclick="openQRModal()" class="bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded-lg transition-colors text-sm"><i class="fas fa-qrcode mr-2"></i> Visa QR</button>
-                <button onclick="exportExcel()" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors text-sm shadow-lg shadow-green-600/20"><i class="fas fa-file-excel mr-2"></i> Excel</button>
-                <button onclick="exportPDF()" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors text-sm shadow-lg shadow-red-500/20"><i class="fas fa-file-pdf mr-2"></i> PDF</button>
+        <div class="w-full flex justify-between mb-4">
+            <button onclick="location.reload()" class="text-slate-400 hover:text-white"><i class="fas fa-redo mr-2"></i> Återställ</button>
+            <span id="results-count" class="text-slate-400">0 svar mottagna</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-3xl p-8 border border-slate-700 min-h-[60vh] shadow-2xl">
+            <h1 id="results-question-display" class="text-3xl font-bold mb-8"></h1>
+            <div id="answers-grid" class="flex flex-wrap gap-4"></div>
+            <div id="chart-container" class="hidden h-[450px] w-full flex justify-center">
+                <canvas id="results-chart"></canvas>
             </div>
         </div>
+    </div>
 
-        <div id="pdf-export-area" class="w-full bg-slate-800 border border-slate-700 rounded-3xl p-8 md:p-12 shadow-2xl relative min-h-[60vh] flex flex-col">
-            <div id="small-qr-container" class="absolute top-8 right-8 bg-white p-2 rounded-lg shadow-md hidden md:block cursor-pointer hover:scale-105 transition-transform" onclick="openQRModal()" title="Klicka för att förstora">
-                <div id="qrcode-small"></div>
-                <p class="text-[10px] text-center text-slate-800 font-bold mt-1">Skanna för<br>att svara</p>
-            </div>
-
-            <h1 id="results-question-display" class="text-3xl md:text-5xl font-bold mb-8 text-center md:text-left md:max-w-[70%] leading-tight pb-2"></h1>
+    <!-- DELTAGARVY (PUBLIKENS MOBIL) -->
+    <div id="view-audience" class="hidden w-full max-w-md flex flex-col items-center space-y-6">
+        <div class="w-full bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl">
+            <h2 id="audience-question-display" class="text-2xl font-bold mb-6 text-center">Väntar på fråga...</h2>
             
-            <div id="results-content-area" class="flex-1 flex flex-col justify-center w-full">
-                <div id="answers-grid" class="flex flex-wrap gap-4 justify-center md:justify-start w-full"></div>
-                <div id="chart-container" class="hidden w-full max-w-2xl mx-auto h-[400px] flex items-center justify-center">
-                    <canvas id="results-chart"></canvas>
+            <div id="audience-form" class="hidden">
+                <div id="audience-open-container">
+                    <textarea id="audience-input" class="w-full bg-slate-700 text-white p-4 rounded-xl mb-4 border border-slate-600 focus:border-blue-500 outline-none" rows="4" placeholder="Ditt svar..."></textarea>
+                    <button onclick="sendAnswer()" class="w-full bg-blue-500 py-4 rounded-xl font-bold text-lg hover:bg-blue-600 transition-colors">Skicka svar</button>
                 </div>
+                <div id="audience-poll-container" class="hidden flex flex-col gap-3"></div>
             </div>
 
-            <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-20">
-                <i class="fas fa-comment-dots text-6xl text-slate-600 mb-4" id="empty-state-icon"></i>
-                <p class="text-slate-500 text-xl text-center px-4">Väntar på svar från publiken...</p>
+            <div id="audience-loading" class="flex flex-col items-center py-8">
+                <i class="fas fa-circle-notch fa-spin text-3xl text-blue-500 mb-4"></i>
+                <p class="text-slate-400">Ansluter till presentatören...</p>
             </div>
         </div>
     </div>
 
-    <!-- MODALER OCH DELTAGARVYER -->
-    <div id="qr-modal" class="hidden fixed inset-0 bg-slate-900/90 z-50 flex flex-col items-center justify-center p-4 backdrop-blur-sm no-print">
-        <div class="bg-slate-800 p-8 md:p-12 rounded-3xl shadow-2xl border border-slate-700 max-w-2xl w-full flex flex-col items-center text-center relative transform transition-all">
-            <button onclick="closeQRModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors bg-slate-700 hover:bg-slate-600 rounded-full w-10 h-10 flex items-center justify-center"><i class="fas fa-times text-xl"></i></button>
-            <h2 id="modal-qr-question" class="text-2xl md:text-4xl font-bold mb-8 text-white"></h2>
-            <div id="modal-qrcode" class="bg-white p-4 rounded-xl shadow-lg mb-8"></div>
-            <p class="text-slate-400 text-lg mb-2">Skanna koden med mobilkameran eller gå till:</p>
-            <p id="modal-url-display" class="text-blue-400 font-mono text-xl md:text-2xl break-all bg-slate-900 p-4 rounded-xl border border-slate-700 select-all w-full"></p>
-        </div>
+    <!-- TACK-VY -->
+    <div id="view-thanks" class="hidden text-center space-y-4">
+        <div class="text-6xl text-emerald-500 mb-4"><i class="fas fa-check-circle"></i></div>
+        <h2 class="text-3xl font-bold">Tack för ditt svar!</h2>
+        <p class="text-slate-400">Ditt svar har skickats direkt till skärmen.</p>
     </div>
 
-    <div id="info-modal" class="hidden fixed inset-0 bg-slate-900/90 z-50 flex flex-col items-center justify-center p-4 backdrop-blur-sm no-print">
-        <div class="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 max-w-md w-full relative">
-            <button onclick="closeInfoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors bg-slate-700 hover:bg-slate-600 rounded-full w-8 h-8 flex items-center justify-center"><i class="fas fa-times"></i></button>
-            <h2 class="text-2xl font-bold mb-6 text-white flex items-center"><i class="fas fa-shield-alt text-blue-400 mr-3"></i> Integritet & Data</h2>
-            <div class="space-y-5 text-slate-300 text-sm md:text-base leading-relaxed">
-                <div class="flex items-start"><i class="fas fa-user-secret text-slate-400 mt-1 w-6 shrink-0"></i><p><strong class="text-white block">Helt anonymt</strong>Ingen information om vem som skickar in vad sparas.</p></div>
-                <div class="flex items-start"><i class="fas fa-server text-slate-400 mt-1 w-6 shrink-0"></i><p><strong class="text-white block">Sparas i molnet</strong>Datan hanteras i realtid via Firebase.</p></div>
-            </div>
-            <button onclick="closeInfoModal()" class="mt-8 w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition-colors">Jag förstår</button>
-        </div>
-    </div>
+    <script>
+        let peer = null;
+        let conn = null; // För deltagare
+        let connections = []; // För presentatör
+        let sessionId = null;
+        let questionData = null;
+        let answers = [];
+        let createMode = 'open';
+        let chartInstance = null;
 
-    <div id="view-audience" class="hidden w-full max-w-md flex flex-col items-center text-center">
-        <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 shadow-2xl w-full">
-            <h2 id="audience-question-display" class="text-2xl font-bold mb-6 leading-snug pb-2">Laddar fråga...</h2>
-            <div id="audience-open-container" class="hidden">
-                <textarea id="audience-input" rows="4" class="w-full bg-slate-700 text-white text-lg rounded-xl p-4 border border-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none placeholder-slate-400 mb-6" placeholder="Skriv ditt svar här..."></textarea>
-                <button onclick="submitAnswer()" id="submit-btn" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl text-lg transition-all shadow-lg shadow-blue-500/30">Skicka in svar</button>
-            </div>
-            <div id="audience-poll-container" class="hidden flex-col space-y-3 w-full"></div>
-        </div>
-    </div>
-
-    <div id="view-thanks" class="hidden w-full max-w-md flex flex-col items-center text-center">
-        <div class="bg-slate-800 border border-slate-700 rounded-3xl p-10 shadow-2xl w-full flex flex-col items-center">
-            <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6"><i class="fas fa-check text-4xl text-emerald-400"></i></div>
-            <h2 class="text-3xl font-bold mb-2">Tack!</h2>
-            <p class="text-slate-400 text-lg">Ditt svar har skickats in och visas nu på skärmen.</p>
-        </div>
-    </div>
-
-    <!-- JAVASCRIPT LOGIK (Ren JS + Firebase, Inget Apps Script) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
-        import { getFirestore, doc, setDoc, updateDoc, arrayUnion, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyBEswnIGN6PakJylyaeEHggza7RXJi4rEY",
-            authDomain: "test-projekt-90180.firebaseapp.com",
-            projectId: "test-projekt-90180",
-            storageBucket: "test-projekt-90180.firebasestorage.app",
-            messagingSenderId: "706237789226",
-            appId: "1:706237789226:web:fe9a1a919aedf178edff53",
-            measurementId: "G-HXQ0364QP1"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const db = getFirestore(app);
-
-        let currentSessionId = null;
-        let renderedSessionId = null; 
-        let isPresenter = true;
-        let sessionData = { question: "", answers: [] };
-        
-        // HÄR ÄR DEN NYA METODEN FÖR ATT HITTA LÄNKEN
-        // Koden läser av var i världen den själv ligger!
-        let scriptUrl = window.location.origin + window.location.pathname; 
-        
-        let unsubscribeSnapshot = null; 
-        let createMode = 'open'; 
-        let chartInstance = null; 
-        const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#6366f1'];
-
-        const views = {
-            loader: document.getElementById('loader'),
-            create: document.getElementById('view-create'),
-            qr: document.getElementById('view-qr'),
-            results: document.getElementById('view-results'),
-            audience: document.getElementById('view-audience'),
-            thanks: document.getElementById('view-thanks')
-        };
-
-        function switchView(viewName) {
-            Object.values(views).forEach(v => v.classList.add('hidden'));
-            if (views[viewName]) views[viewName].classList.remove('hidden');
+        // --- NAVIGATION ---
+        function showView(name) {
+            ['create', 'qr', 'results', 'audience', 'thanks'].forEach(v => 
+                document.getElementById('view-' + v).classList.add('hidden'));
+            document.getElementById('view-' + name).classList.remove('hidden');
         }
-
-        function parseQuestionData(rawString) {
-            try {
-                const parsed = JSON.parse(rawString);
-                if (parsed && parsed.type) return parsed;
-            } catch (e) { }
-            return { type: 'open', text: rawString, options: [] };
-        }
-
-        // --- INITIERING VIA STANDARD JAVASCRIPT (Istället för Apps Script) ---
-        function initApp() {
-            Chart.defaults.color = '#cbd5e1';
-            Chart.defaults.font.family = "'Inter', sans-serif";
-
-            // Vi läser parametrarna ur URL:en direkt med inbyggt Javascript
-            const urlParams = new URLSearchParams(window.location.search);
-            const paramS = urlParams.get('s');
-
-            if (paramS && paramS.trim() !== "") {
-                currentSessionId = paramS;
-                isPresenter = false;
-            }
-            handleRouting();
-        }
-
-        function handleRouting() {
-            views.loader.classList.add('hidden');
-            if (!isPresenter && currentSessionId) {
-                loadAudienceView();
-            } else {
-                renderCreateHistory(); 
-                switchView('create');
-            }
-        }
-
-        // --- HISTORIK FUNKTIONER ---
-        function getHistory() {
-            const h = localStorage.getItem('mentimeter_history');
-            return h ? JSON.parse(h) : [];
-        }
-
-        function saveToHistory(id, rawQuestionString) {
-            let history = getHistory();
-            history = history.filter(item => item.id !== id);
-            history.unshift({ id: id, question: rawQuestionString, timestamp: Date.now() });
-            if (history.length > 20) history.pop();
-            localStorage.setItem('mentimeter_history', JSON.stringify(history));
-        }
-
-        function renderCreateHistory() {
-            const history = getHistory();
-            const section = document.getElementById('create-history-section');
-            const list = document.getElementById('create-history-list');
-            if (history.length === 0) { section.classList.add('hidden'); return; }
-            section.classList.remove('hidden');
-            list.innerHTML = '';
-            history.slice(0, 3).forEach(item => {
-                const qData = parseQuestionData(item.question);
-                const btn = document.createElement('button');
-                const shortQ = qData.text.length > 40 ? qData.text.substring(0, 40) + '...' : qData.text;
-                const icon = qData.type === 'poll' ? '<i class="fas fa-chart-pie mr-2 text-emerald-500"></i>' : '<i class="fas fa-comment-dots mr-2 text-blue-500"></i>';
-                btn.className = "bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 px-4 rounded-xl border border-slate-600 transition-colors flex justify-between items-center text-left";
-                btn.innerHTML = `<span>${icon} ${shortQ}</span> <i class="fas fa-chevron-right text-slate-500"></i>`;
-                btn.onclick = () => {
-                    currentSessionId = item.id;
-                    sessionData.question = item.question;
-                    sessionData.answers = []; 
-                    window.goToResults();
-                };
-                list.appendChild(btn);
-            });
-        }
-
-        function renderHistorySelect() {
-            const history = getHistory();
-            const select = document.getElementById('history-select');
-            const container = document.getElementById('history-container');
-            if (history.length === 0) { container.classList.add('hidden'); return; }
-            container.classList.remove('hidden');
-            select.innerHTML = '';
-            history.forEach(item => {
-                const qData = parseQuestionData(item.question);
-                const date = new Date(item.timestamp);
-                const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                const option = document.createElement('option');
-                option.value = item.id;
-                const shortQ = qData.text.length > 35 ? qData.text.substring(0, 35) + '...' : qData.text;
-                const prefix = qData.type === 'poll' ? '[📊]' : '[💬]';
-                option.text = `${prefix} [${timeStr}] - ${shortQ}`;
-                if (item.id === currentSessionId) option.selected = true;
-                select.appendChild(option);
-            });
-        }
-
-        window.loadSelectedHistory = () => {
-            const selectedId = document.getElementById('history-select').value;
-            if (!selectedId || selectedId === currentSessionId) return;
-            currentSessionId = selectedId;
-            sessionData.answers = []; 
-            renderedSessionId = null; 
-            document.getElementById('answers-grid').innerHTML = '';
-            if(chartInstance) { chartInstance.destroy(); chartInstance = null; }
-            document.getElementById('live-answer-count').innerText = "0";
-            document.getElementById('empty-state').classList.remove('hidden');
-            document.querySelector('#empty-state p').innerText = "Hämtar data...";
-            
-            const item = getHistory().find(h => h.id === selectedId);
-            if (item) {
-                sessionData.question = item.question;
-                document.getElementById('results-question-display').innerText = parseQuestionData(item.question).text;
-                updateSmallQR(currentSessionId);
-            }
-            startPolling();
-        };
-
-        window.deleteSelectedHistory = () => {
-            const selectedId = document.getElementById('history-select').value;
-            if (!selectedId) return;
-            if(confirm("Vill du verkligen ta bort denna fråga från din historik?")) {
-                let history = getHistory().filter(item => item.id !== selectedId);
-                localStorage.setItem('mentimeter_history', JSON.stringify(history));
-                if (history.length > 0) {
-                    if (currentSessionId === selectedId) {
-                        document.getElementById('history-select').value = history[0].id;
-                        window.loadSelectedHistory();
-                    } else { renderHistorySelect(); }
-                } else { window.goToCreate(); }
-            }
-        };
 
         // --- SKAPA FRÅGA ---
-        window.setQuestionType = (type) => {
+        function setQuestionType(type) {
             createMode = type;
-            const tabOpen = document.getElementById('tab-open');
-            const tabPoll = document.getElementById('tab-poll');
-            const pollCont = document.getElementById('poll-options-container');
-            const input = document.getElementById('question-input');
-
-            if (type === 'open') {
-                tabOpen.className = "tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg bg-blue-600 text-white font-semibold shadow-md";
-                tabPoll.className = "tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg text-slate-400 hover:text-white font-medium";
-                pollCont.classList.add('hidden');
-                input.placeholder = "T.ex. Vad har du för förväntningar på dagens föreläsning?";
-            } else {
-                tabPoll.className = "tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg bg-emerald-600 text-white font-semibold shadow-md";
-                tabOpen.className = "tab-btn flex-1 py-2.5 text-sm md:text-base rounded-lg text-slate-400 hover:text-white font-medium";
-                pollCont.classList.remove('hidden');
-                input.placeholder = "T.ex. Vilken är din favoritdag i veckan?";
-                updateOptionNumbers();
+            document.getElementById('tab-open').className = `tab-btn flex-1 py-2.5 rounded-lg font-semibold ${type === 'open' ? 'bg-blue-600 text-white' : 'text-slate-400'}`;
+            document.getElementById('tab-poll').className = `tab-btn flex-1 py-2.5 rounded-lg font-semibold ${type === 'poll' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`;
+            document.getElementById('poll-options-container').classList.toggle('hidden', type === 'open');
+            if(type === 'poll' && document.getElementById('poll-options-list').children.length === 0) {
+                addPollOption(); addPollOption();
             }
-        };
+        }
 
-        window.addPollOption = () => {
+        function addPollOption() {
             const list = document.getElementById('poll-options-list');
-            const div = document.createElement('div');
-            div.className = "flex items-center space-x-3 option-row";
-            div.innerHTML = `
-                <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center text-slate-400 text-sm shrink-0 shadow-inner opt-num"></div>
-                <input type="text" class="poll-option flex-1 bg-slate-700/80 text-white text-lg rounded-lg p-3 border border-slate-600 focus:border-blue-500 outline-none placeholder-slate-500" placeholder="Nytt alternativ">
-                <button onclick="removeOption(this)" class="text-slate-500 hover:text-red-400 w-8 h-8 flex items-center justify-center transition-colors"><i class="fas fa-trash"></i></button>
-            `;
-            list.appendChild(div);
-            updateOptionNumbers();
-        };
-
-        window.removeOption = (btn) => {
-            const rows = document.querySelectorAll('.option-row');
-            if (rows.length <= 2) return; 
-            btn.closest('.option-row').remove();
-            updateOptionNumbers();
-        };
-
-        function updateOptionNumbers() {
-            const rows = document.querySelectorAll('.option-row');
-            rows.forEach((row, idx) => {
-                row.querySelector('div').innerText = idx + 1;
-                const delBtn = row.querySelector('button');
-                if (rows.length <= 2) { delBtn.classList.add('opacity-50', 'cursor-not-allowed'); delBtn.disabled = true; }
-                else { delBtn.classList.remove('opacity-50', 'cursor-not-allowed'); delBtn.disabled = false; }
-            });
+            const input = document.createElement('input');
+            input.className = "poll-option w-full bg-slate-700 text-white p-3 rounded-lg border border-slate-600 mb-2 focus:border-emerald-500 outline-none";
+            input.placeholder = "Alternativ " + (list.children.length + 1);
+            list.appendChild(input);
         }
 
-        window.goToCreate = () => {
-            if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
-            currentSessionId = null;
-            document.getElementById('question-input').value = '';
-            document.querySelectorAll('.poll-option').forEach(opt => opt.value = '');
-            renderCreateHistory();
-            switchView('create');
-        };
+        // --- PRESENTATÖR LOGIK ---
+        function startPresentation() {
+            const qText = document.getElementById('question-input').value.trim();
+            if(!qText) return alert("Skriv en fråga!");
 
-        window.startPresentation = async () => {
-            const input = document.getElementById('question-input');
-            const questionText = input.value.trim();
-            if (!questionText) { window.showError("Vänligen skriv en fråga först."); input.focus(); return; }
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').innerText = "Initierar P2P...";
 
-            let payloadString = questionText; 
-            if (createMode === 'poll') {
-                const options = Array.from(document.querySelectorAll('.poll-option')).map(i => i.value.trim()).filter(v => v !== '');
-                if (options.length < 2) { window.showError("En omröstning måste ha minst två svarsalternativ."); return; }
-                payloadString = JSON.stringify({ type: 'poll', text: questionText, options: options });
-            }
-
-            views.create.classList.add('hidden');
-            views.loader.classList.remove('hidden');
-            const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-            try {
-                await setDoc(doc(db, "sessions", sessionId), { question: payloadString, answers: [], createdAt: new Date() });
-                currentSessionId = sessionId;
-                saveToHistory(sessionId, payloadString); 
-                setupQRView(payloadString);
-            } catch (error) {
-                console.error("Firebase fel:", error);
-                window.showError("Kunde inte starta presentationen.");
-                views.loader.classList.add('hidden');
-                views.create.classList.remove('hidden');
-            }
-        };
-
-        function setupQRView(rawQuestionString) {
-            views.loader.classList.add('hidden');
-            const qData = parseQuestionData(rawQuestionString);
-            document.getElementById('qr-question-display').innerText = qData.text;
-            document.getElementById('qr-question-type-icon').innerHTML = qData.type === 'poll' ? '<i class="fas fa-chart-pie text-emerald-400"></i>' : '<i class="fas fa-comment-dots text-blue-400"></i>';
-
-            sessionData.question = rawQuestionString;
-            sessionData.answers = [];
-            renderedSessionId = null;
+            // Skapa ett unikt ID för denna session
+            sessionId = 'ASK-' + Math.random().toString(36).substring(2, 7).toUpperCase();
             
-            const joinUrl = scriptUrl + "?s=" + currentSessionId;
-            document.getElementById('url-display').innerText = joinUrl;
+            // Initiera PeerJS som "Host"
+            peer = new Peer(sessionId);
 
-            document.getElementById('qrcode-large').innerHTML = "";
-            new QRCode(document.getElementById('qrcode-large'), { text: joinUrl, width: 250, height: 250, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
-
-            startPolling();
-            switchView('qr');
-        }
-
-        window.goToResults = () => {
-            document.getElementById('results-question-display').innerText = parseQuestionData(sessionData.question).text;
-            updateSmallQR(currentSessionId);
-            renderHistorySelect();
-            startPolling(); 
-            renderAnswers();
-            switchView('results');
-        };
-
-        function updateSmallQR(sessionId) {
-            const joinUrl = scriptUrl + "?s=" + sessionId;
-            document.getElementById('qrcode-small').innerHTML = "";
-            new QRCode(document.getElementById('qrcode-small'), { text: joinUrl, width: 100, height: 100, colorDark : "#0f172a", colorLight : "#ffffff" });
-        }
-
-        window.openQRModal = () => {
-            if (!currentSessionId) return;
-            const joinUrl = scriptUrl + "?s=" + currentSessionId;
-            document.getElementById('modal-qr-question').innerText = parseQuestionData(sessionData.question).text;
-            document.getElementById('modal-url-display').innerText = joinUrl;
-            document.getElementById('modal-qrcode').innerHTML = "";
-            new QRCode(document.getElementById('modal-qrcode'), { text: joinUrl, width: 300, height: 300, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
-            document.getElementById('qr-modal').classList.remove('hidden');
-        };
-
-        window.closeQRModal = () => document.getElementById('qr-modal').classList.add('hidden');
-        document.getElementById('qr-modal').addEventListener('click', function(e) { if (e.target === this) window.closeQRModal(); });
-        window.openInfoModal = () => document.getElementById('info-modal').classList.remove('hidden');
-        window.closeInfoModal = () => document.getElementById('info-modal').classList.add('hidden');
-        document.getElementById('info-modal').addEventListener('click', function(e) { if (e.target === this) window.closeInfoModal(); });
-
-        // --- HÄMTA SVAR FRÅN FIREBASE ---
-        function startPolling() {
-            if (unsubscribeSnapshot) unsubscribeSnapshot(); 
-            if (!currentSessionId) return;
-            
-            unsubscribeSnapshot = onSnapshot(doc(db, "sessions", currentSessionId), (docSnap) => {
-                if (docSnap.exists()) {
-                    sessionData = docSnap.data();
-                    document.getElementById('live-answer-count').innerText = sessionData.answers ? sessionData.answers.length : 0;
-                    document.querySelector('#empty-state p').innerText = "Väntar på svar från publiken...";
-                    if (!views.results.classList.contains('hidden')) renderAnswers();
-                } else {
-                    document.getElementById('answers-grid').innerHTML = "";
-                    if(chartInstance) { chartInstance.destroy(); chartInstance = null; }
-                    document.getElementById('empty-state').classList.remove('hidden');
-                    document.querySelector('#empty-state p').innerHTML = "<span class='text-red-400'><i class='fas fa-info-circle'></i> Frågan har raderats.</span>";
-                }
-            });
-        }
-
-        function renderAnswers() {
-            const grid = document.getElementById('answers-grid');
-            const chartCont = document.getElementById('chart-container');
-            const emptyState = document.getElementById('empty-state');
-            const qData = parseQuestionData(sessionData.question);
-            const answers = sessionData.answers || [];
-            
-            if (answers.length === 0) {
-                emptyState.classList.remove('hidden');
-                grid.innerHTML = "";
-                chartCont.classList.add('hidden');
-                renderedSessionId = currentSessionId; 
-                document.getElementById('empty-state-icon').className = qData.type === 'poll' ? "fas fa-chart-pie text-6xl text-slate-600 mb-4" : "fas fa-comment-dots text-6xl text-slate-600 mb-4";
-                return;
-            }
-            
-            emptyState.classList.add('hidden');
-            
-            if (qData.type === 'poll') {
-                grid.classList.add('hidden');
-                chartCont.classList.remove('hidden');
-                renderPieChart(qData.options, answers);
-            } else {
-                chartCont.classList.add('hidden');
-                grid.classList.remove('hidden');
+            peer.on('open', (id) => {
+                updateStatus(true, "Väntar på deltagare...");
                 
-                const needsFullRender = (grid.children.length !== answers.length) || (renderedSessionId !== currentSessionId);
-                if(needsFullRender) {
-                    grid.innerHTML = "";
-                    [...answers].reverse().forEach((answer, index) => {
-                        const card = document.createElement('div');
-                        card.className = `answer-card bg-slate-700/80 text-white p-4 md:p-6 rounded-2xl shadow-md border border-slate-600 backdrop-blur-sm max-w-full break-words text-lg md:text-xl font-medium`;
-                        card.style.animationDelay = `${Math.min(index * 0.1, 1)}s`;
-                        card.innerText = answer;
-                        grid.appendChild(card);
-                    });
-                }
-            }
-            renderedSessionId = currentSessionId; 
+                const qObj = { 
+                    text: qText, 
+                    type: createMode, 
+                    options: createMode === 'poll' ? Array.from(document.querySelectorAll('.poll-option')).map(i => i.value.trim()).filter(v => v) : []
+                };
+                questionData = qObj;
+
+                setupQRView(id, qObj);
+            });
+
+            peer.on('connection', (c) => {
+                connections.push(c);
+                updateConnectedCount();
+                
+                c.on('open', () => {
+                    // Skicka frågan till deltagaren så fort de ansluter
+                    c.send({ type: 'QUESTION', data: questionData });
+                });
+
+                c.on('data', (data) => {
+                    if(data.type === 'ANSWER') {
+                        handleNewAnswer(data.val);
+                    }
+                });
+            });
+
+            peer.on('error', (err) => {
+                alert("Ett anslutningsfel uppstod. Prova att ladda om sidan.");
+                location.reload();
+            });
         }
 
-        function renderPieChart(options, answers) {
-            const ctx = document.getElementById('results-chart').getContext('2d');
-            const counts = options.map(opt => answers.filter(a => a === opt).length);
-            const isPdfMode = document.getElementById('pdf-export-area').classList.contains('pdf-mode');
-            const textColor = isPdfMode ? '#0f172a' : '#f8fafc';
+        function setupQRView(id, q) {
+            document.getElementById('qr-question-display').innerText = q.text;
+            const url = window.location.origin + window.location.pathname + "?join=" + id;
+            document.getElementById('url-display').innerText = url;
+            
+            document.getElementById('qrcode-large').innerHTML = "";
+            new QRCode(document.getElementById('qrcode-large'), { text: url, width: 220, height: 220 });
+            showView('qr');
+        }
 
-            if (chartInstance) {
+        function handleNewAnswer(val) {
+            answers.push(val);
+            document.getElementById('results-count').innerText = answers.length + " svar mottagna";
+            
+            if(questionData.type === 'poll') {
+                updateChart();
+            } else {
+                const grid = document.getElementById('answers-grid');
+                const div = document.createElement('div');
+                div.className = "answer-card bg-slate-700 p-4 rounded-xl border border-slate-600 shadow-lg max-w-xs";
+                div.innerText = val;
+                grid.prepend(div);
+            }
+        }
+
+        function showResultsView() {
+            document.getElementById('results-question-display').innerText = questionData.text;
+            if(questionData.type === 'poll') {
+                document.getElementById('chart-container').classList.remove('hidden');
+                document.getElementById('answers-grid').classList.add('hidden');
+                updateChart();
+            }
+            showView('results');
+        }
+
+        function updateChart() {
+            const opts = questionData.options;
+            const counts = opts.map(o => answers.filter(a => a === o).length);
+            
+            if(chartInstance) {
                 chartInstance.data.datasets[0].data = counts;
-                chartInstance.options.plugins.legend.labels.color = textColor;
                 chartInstance.update();
             } else {
+                const ctx = document.getElementById('results-chart').getContext('2d');
                 chartInstance = new Chart(ctx, {
-                    type: 'pie',
-                    data: { labels: options, datasets: [{ data: counts, backgroundColor: chartColors, borderColor: '#0f172a', borderWidth: 2, hoverOffset: 10 }] },
+                    type: 'bar',
+                    data: {
+                        labels: opts,
+                        datasets: [{
+                            label: 'Antal röster',
+                            data: counts,
+                            backgroundColor: '#3b82f6',
+                            borderRadius: 8
+                        }]
+                    },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'right', labels: { color: textColor, font: { size: 16, family: "'Inter', sans-serif", weight: '500' }, padding: 20 } },
-                            tooltip: {
-                                bodyFont: { size: 16 },
-                                callbacks: {
-                                    label: function(context) {
-                                        const count = context.raw;
-                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        const percentage = Math.round((count / total) * 100) + '%';
-                                        return (context.label ? context.label + ': ' : '') + count + ' st (' + percentage + ')';
-                                    }
-                                }
-                            }
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            y: { beginAtZero: true, ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: '#334155' } },
+                            x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
                         }
                     }
                 });
             }
         }
 
-        // --- DELTAGARVY ---
-        async function loadAudienceView() {
-            views.loader.classList.remove('hidden');
-            try {
-                const docSnap = await getDoc(doc(db, "sessions", currentSessionId));
-                views.loader.classList.add('hidden');
+        // --- DELTAGARE LOGIK ---
+        function initAudience() {
+            const params = new URLSearchParams(window.location.search);
+            const hostId = params.get('join');
+            if(!hostId) return;
+
+            showView('audience');
+            peer = new Peer(); // Skapa slumpmässigt ID för deltagaren
+
+            peer.on('open', () => {
+                conn = peer.connect(hostId);
                 
-                if (docSnap.exists()) {
-                    const qData = parseQuestionData(docSnap.data().question);
-                    document.getElementById('audience-question-display').innerText = qData.text;
-                    const openCont = document.getElementById('audience-open-container');
-                    const pollCont = document.getElementById('audience-poll-container');
-                    
-                    if (qData.type === 'poll') {
-                        openCont.classList.add('hidden');
-                        pollCont.classList.remove('hidden');
-                        pollCont.innerHTML = '';
-                        qData.options.forEach((opt, index) => {
-                            const btn = document.createElement('button');
-                            const color = chartColors[index % chartColors.length];
-                            btn.className = "w-full bg-slate-700 hover:bg-slate-600 text-white text-lg font-medium py-4 px-6 rounded-xl border border-slate-600 transition-all text-left flex justify-between items-center shadow-md transform hover:scale-[1.02]";
-                            btn.innerHTML = `<span>${opt}</span> <div class="w-4 h-4 rounded-full" style="background-color: ${color}"></div>`;
-                            btn.onclick = () => window.submitAnswer(opt, btn);
-                            pollCont.appendChild(btn);
-                        });
-                    } else {
-                        pollCont.classList.add('hidden');
-                        openCont.classList.remove('hidden');
+                conn.on('open', () => {
+                    updateStatus(true, "Ansluten till presentation");
+                });
+
+                conn.on('data', (msg) => {
+                    if(msg.type === 'QUESTION') {
+                        renderAudienceForm(msg.data);
                     }
-                    switchView('audience');
-                } else { window.showError("Frågan hittades inte."); }
-            } catch (err) { views.loader.classList.add('hidden'); window.showError("Fel vid hämtning av fråga."); }
-        }
+                });
 
-        window.submitAnswer = async (predefinedAnswer = null, clickedButton = null) => {
-            let answer = predefinedAnswer;
-            if (!answer) {
-                answer = document.getElementById('audience-input').value.trim();
-                if (!answer) { document.getElementById('audience-input').focus(); return; }
-                const btn = document.getElementById('submit-btn');
-                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Skickar...';
-            } else if (clickedButton) {
-                document.getElementById('audience-poll-container').querySelectorAll('button').forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
-                clickedButton.classList.remove('opacity-50', 'bg-slate-700'); clickedButton.classList.add('bg-blue-600', 'border-blue-500');
-                clickedButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Skickar...`;
-            }
-
-            try {
-                await updateDoc(doc(db, "sessions", currentSessionId), { answers: arrayUnion(answer) });
-                switchView('thanks');
-            } catch (err) { window.showError("Ett anslutningsfel uppstod. Försök igen."); resetAudienceUI(); }
-        };
-
-        function resetAudienceUI() {
-            const btn = document.getElementById('submit-btn');
-            if(btn) { btn.disabled = false; btn.innerHTML = 'Skicka in svar'; }
-            document.getElementById('audience-poll-container').querySelectorAll('button').forEach(b => { 
-                b.disabled = false; b.classList.remove('opacity-50', 'bg-blue-600', 'border-blue-500'); b.classList.add('bg-slate-700');
+                conn.on('close', () => {
+                    alert("Anslutningen till presentatören avbröts.");
+                    location.reload();
+                });
             });
         }
 
-        // --- EXPORT ---
-        window.exportExcel = () => {
-            if (!sessionData || !sessionData.answers || sessionData.answers.length === 0) { window.showError("Inga svar att exportera."); return; }
-            try {
-                const qData = parseQuestionData(sessionData.question);
-                const wsData = [[`Fråga: ${qData.text}`], [`Typ: ${qData.type === 'poll' ? 'Omröstning' : 'Öppen fråga'}`], [], ["Svar"]];
-                if (qData.type === 'poll') {
-                    wsData.push(["Alternativ", "Antal Röster"]);
-                    qData.options.forEach(opt => wsData.push([opt, sessionData.answers.filter(a => a === opt).length]));
-                } else { sessionData.answers.forEach(a => wsData.push([a])); }
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), "Resultat");
-                XLSX.writeFile(wb, "Mentimeter_Resultat.xlsx");
-            } catch (error) { window.showError("Kunde inte exportera till Excel."); }
+        function renderAudienceForm(q) {
+            document.getElementById('audience-loading').classList.add('hidden');
+            document.getElementById('audience-form').classList.remove('hidden');
+            document.getElementById('audience-question-display').innerText = q.text;
+
+            if(q.type === 'poll') {
+                document.getElementById('audience-open-container').classList.add('hidden');
+                const cont = document.getElementById('audience-poll-container');
+                cont.innerHTML = "";
+                cont.classList.remove('hidden');
+                q.options.forEach(o => {
+                    const b = document.createElement('button');
+                    b.className = "bg-slate-700 p-4 rounded-xl hover:bg-slate-600 text-left border border-slate-600 transition-all active:scale-95";
+                    b.innerText = o;
+                    b.onclick = () => sendAnswer(o);
+                    cont.appendChild(b);
+                });
+            }
+        }
+
+        function sendAnswer(val) {
+            const answer = val || document.getElementById('audience-input').value.trim();
+            if(!answer) return;
+
+            if(conn && conn.open) {
+                conn.send({ type: 'ANSWER', val: answer });
+                showView('thanks');
+            } else {
+                alert("Anslutningen förlorades. Prova att ladda om.");
+            }
+        }
+
+        // --- UTILS ---
+        function updateStatus(online, text) {
+            document.getElementById('status-dot').className = `w-2 h-2 rounded-full ${online ? 'bg-emerald-500' : 'bg-red-500'}`;
+            document.getElementById('status-text').innerText = text;
+        }
+
+        function updateConnectedCount() {
+            document.getElementById('connected-count').innerText = connections.length + " deltagare anslutna";
+        }
+
+        window.onload = () => {
+            initAudience();
+            // Om vi inte är i deltagarläge, visa skapa-vyn
+            const params = new URLSearchParams(window.location.search);
+            if(!params.get('join')) showView('create');
         };
-
-        window.exportPDF = () => {
-            const element = document.getElementById('pdf-export-area');
-            element.classList.add('pdf-mode');
-            if (chartInstance) { chartInstance.options.plugins.legend.labels.color = '#0f172a'; chartInstance.update(); }
-            setTimeout(() => {
-                html2pdf().set({ margin: 10, filename: 'Mentimeter_Resultat.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(element).save().then(() => {
-                    element.classList.remove('pdf-mode');
-                    if (chartInstance) { chartInstance.options.plugins.legend.labels.color = '#f8fafc'; chartInstance.update(); }
-                }).catch(() => { element.classList.remove('pdf-mode'); window.showError("Kunde inte exportera till PDF."); });
-            }, 300); 
-        };
-
-        window.showError = (msg) => { document.getElementById('error-text').innerText = msg; document.getElementById('error-message').classList.remove('hidden'); setTimeout(window.hideError, 5000); };
-        window.hideError = () => document.getElementById('error-message').classList.add('hidden');
-
-        window.onload = initApp;
     </script>
 </body>
 </html>
