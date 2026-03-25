@@ -984,8 +984,71 @@
         // --- DELTAGARENS FUNKTIONER ---
         window.loadAudienceView = async () => {
             views.loader.classList.remove('hidden');
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId);
+            if (!currentSessionId) return;
             
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const qData = window.parseQuestionData(data.question);
+                    
+                    document.getElementById('audience-question-display').innerText = qData.text;
+                    
+                    if (qData.type === 'poll') {
+                        document.getElementById('audience-open-container').classList.add('hidden');
+                        const pollCont = document.getElementById('audience-poll-container');
+                        pollCont.innerHTML = '';
+                        pollCont.classList.remove('hidden');
+                        pollCont.classList.add('flex');
+                        
+                        qData.options.forEach(opt => {
+                            const btn = document.createElement('button');
+                            btn.className = "w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-4 px-6 rounded-xl text-lg transition-colors border border-slate-600 text-left";
+                            btn.innerText = opt;
+                            btn.onclick = () => window.submitPollAnswer(opt, btn);
+                            pollCont.appendChild(btn);
+                        });
+                    } else {
+                        document.getElementById('audience-poll-container').classList.add('hidden');
+                        document.getElementById('audience-poll-container').classList.remove('flex');
+                        document.getElementById('audience-open-container').classList.remove('hidden');
+                    }
+                    switchView('audience');
+                } else {
+                    window.showError("Frågan hittades inte.");
+                }
+            } catch (error) {
+                console.error("Fel vid laddning:", error);
+                window.showError("Kunde inte ladda frågan.");
+            }
+        };
+
+        window.submitAnswer = async () => {
+            const input = document.getElementById('audience-input');
+            const answer = input.value.trim();
+            if (!answer) return;
+            
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Skickar...';
+            
+            await saveAnswerToFirebase(answer);
+        };
+
+        window.submitPollAnswer = async (answer, btnElement) => {
+            const allBtns = document.getElementById('audience-poll-container').querySelectorAll('button');
+            allBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+            
+            btnElement.classList.remove('bg-slate-700', 'opacity-50');
+            btnElement.classList.add('bg-blue-600', 'border-blue-500');
+            btnElement.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> ${answer}`;
+            
+            await saveAnswerToFirebase(answer);
+        };
+
+        async function saveAnswerToFirebase(answer) {
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId);
             try {
                 // Spara som ett unikt objekt för att lura Firebases inbyggda dubblett-skydd (arrayUnion)
                 await updateDoc(docRef, { answers: arrayUnion({ text: answer, id: Date.now() + Math.random() }) });
@@ -995,7 +1058,7 @@
                 window.showError("Ett fel uppstod när svaret skulle skickas.");
                 resetAudienceUI();
             }
-        };
+        }
 
         function resetAudienceUI() {
             const btn = document.getElementById('submit-btn');
